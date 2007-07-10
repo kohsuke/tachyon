@@ -1,0 +1,186 @@
+<?xml version="1.0"?>
+<!--
+  The contents of this file are subject to the terms 
+  of the Common Development and Distribution License 
+  (the License).  You may not use this file except in
+  compliance with the License.
+  
+  You can obtain a copy of the license at 
+  https://glassfish.dev.java.net/public/CDDLv1.0.html or
+  glassfish/bootstrap/legal/CDDLv1.0.txt.
+  See the License for the specific language governing 
+  permissions and limitations under the License.
+  
+  When distributing Covered Code, include this CDDL 
+  Header Notice in each file and include the License file 
+  at glassfish/bootstrap/legal/CDDLv1.0.txt.  
+  If applicable, add the following below the CDDL Header, 
+  with the fields enclosed by brackets [] replaced by
+  you own identifying information: 
+  "Portions Copyrighted [year] [name of copyright owner]"
+  
+  Copyright 2007 Sun Microsystems, Inc. All rights reserved.
+ -->
+<!--
+     $Id$
+-->
+<project xmlns:maven="urn:maven-artifact-ant"
+         xmlns:maven-repository-importer="urn:maven-repository-importer"
+         name="tachyon"
+         default="build"
+         basedir=".">
+         
+    <property file="build.properties"/>
+    <property file="${user.home}/build.properties"/>
+    <property name="application.name" value="tachyon"/>
+    <property name="application.version" value="0.0.1-SNAPSHOT"/>
+
+    <property name="build.dir" value="${basedir}/build"/>
+    <property name="dist.dir" value="${basedir}/dist"/>
+    <property name="lib.dir" value="${basedir}/lib"/>
+    <property name="etc.dir" value="${basedir}/etc"/>
+    <property name="src.dir" value="${basedir}/src/main"/>
+    <property name="test.dir" value="${basedir}/src/test"/>
+
+    <property name="test.main.class" value="org.jvnet.tachyon.test.Main"/>
+    
+    <property name="scalac.target" value="jvm-1.5"/>
+    <property name="scalac.debuginfo" value="vars"/>
+    <property name="scalac.deprecation" value="yes"/>
+    <property name="scalac.unchecked" value="yes"/>
+    
+    <property name="javadotnet.maven.repo.url" value="https://maven-repository.dev.java.net/nonav/repository/"/>
+    <property name="liftweb.maven.repo.url" value="http://maven.liftweb.net/"/>
+    <property name="objectweb.maven.repo.url" value="http://maven.objectweb.org/maven2/"/>
+    
+    <typedef resource="org/apache/maven/artifact/ant/antlib.xml"
+             uri="urn:maven-artifact-ant">
+        <classpath>
+            <pathelement location="${basedir}/lib/maven-artifact-ant-2.0.4-dep.jar"/>
+        </classpath>
+    </typedef>
+    <typedef resource="maven-repository-importer.properties"
+             uri="urn:maven-repository-importer">
+        <classpath>
+            <pathelement location="${basedir}/lib/maven-repository-importer-1.2.jar"/>
+        </classpath>
+    </typedef>
+    
+    <target name="all" depends="dist"/>
+    
+    <target name="mkdirs">
+        <mkdir dir="${build.dir}"/>
+        <mkdir dir="${build.dir}/classes"/>
+        <mkdir dir="${build.dir}/lib"/>
+        <mkdir dir="${build.dir}/test-classes"/>
+    </target>
+
+    <target name="prepare" depends="mkdirs">
+        <maven:remoteRepository id="liftweb.maven.repo" url="${liftweb.maven.repo.url}" layout="default"/>
+        <maven:dependencies pathId="scala.library.classpath" filesetId="scala.library.fileset">
+            <remoteRepository refid="liftweb.maven.repo"/>
+            <dependency groupId="scala" artifactId="scala-library" version="2.5.1"/>
+        </maven:dependencies>
+        <maven:dependencies pathId="scala.compiler.classpath" filesetId="scala.compiler.fileset">
+            <remoteRepository refid="liftweb.maven.repo"/>
+            <dependency groupId="scala" artifactId="scala-compiler" version="2.5.1"/>
+        </maven:dependencies>
+        <maven:remoteRepository id="objectweb.maven.repo" url="${objectweb.maven.repo.url}" layout="default"/>
+        <maven:dependencies pathId="asm.classpath" filesetId="asm.fileset">
+            <remoteRepository refid="objectweb.maven.repo"/>
+            <dependency groupId="asm" artifactId="asm" version="3.0"/>
+            <dependency groupId="asm" artifactId="asm-tree" version="3.0"/>
+            <dependency groupId="asm" artifactId="asm-analysis" version="3.0"/>
+        </maven:dependencies>
+        <path id="scala.classpath">
+          <path refid="scala.compiler.classpath"/>
+          <path refid="scala.library.classpath"/>
+        </path>
+        <path id="all.dependencies.classpath">
+          <path refid="scala.classpath"/>
+          <path refid="asm.classpath"/>
+        </path>
+    </target>
+        
+    <target name="compile" depends="prepare">
+        <taskdef resource="scala/tools/ant/antlib.xml">
+            <classpath refid="scala.classpath"/>
+        </taskdef>
+        <path id="compile.classpath">
+          <path refid="all.dependencies.classpath"/>
+        </path>
+        <scalac srcdir="${src.dir}/scala"
+                destdir="${build.dir}/classes"
+                classpathref="compile.classpath"
+                target="${scalac.target}"
+                deprecation="${scalac.deprecation}"
+                debuginfo="${scalac.debuginfo}"
+                unchecked="${scalac.unchecked}"/>
+    </target>
+
+    <target name="build" depends="compile">
+    </target>
+    
+    <target name="jar" depends="build">
+    <jar basedir="${build.dir}/classes"
+         destfile="${build.dir}/lib/${application.name}.jar"/>
+    </target>
+    
+    <target name="dist" depends="jar">
+        <mkdir dir="${dist.dir}"/>
+        <mkdir dir="${dist.dir}/lib"/>
+        <copy todir="${dist.dir}/lib">
+            <fileset dir="${build.dir}/lib">
+                <include name="${application.name}.jar"/>
+            </fileset>
+        </copy>
+        <copy todir="${dist.dir}/lib">
+            <fileset refid="scala.library.fileset"/>
+            <fileset refid="asm.fileset"/>
+            <mapper type="flatten"/>
+        </copy>
+    </target>
+
+    <target name="compile-test" depends="build">
+        <path id="test.compile.classpath">
+          <path refid="compile.classpath"/>
+          <pathelement location="${build.dir}/classes"/>
+        </path>
+        <scalac srcdir="${test.dir}/scala"
+                destdir="${build.dir}/test-classes"
+                classpathref="test.compile.classpath"/>
+    </target>
+    
+    <target name="test" depends="compile-test">
+        <path id="test.run.classpath">
+          <path refid="test.compile.classpath"/>
+          <pathelement location="${build.dir}/test-classes"/>
+        </path>
+        <java classname="${test.main.class}"
+              fork="true">
+            <classpath>
+                <path refid="test.run.classpath"/>
+            </classpath>
+        </java>
+    </target>
+    
+    <target name="prepare-maven" depends="dist">
+        <delete dir="${build.dir}/maven-repo"/>
+        <maven-repository-importer:maven-repository-importer
+            destdir="${build.dir}/maven-repo"
+            version="${application.version}">
+            <artifact jar="${build.dir}/lib/${application.name}.jar" pom="etc/${application.name}.pom"/>
+        </maven-repository-importer:maven-repository-importer>
+    </target>
+    
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+        <delete dir="${dist.dir}"/>
+    </target>
+    
+    <target name="help">
+        <echo>
+Available targets: build, dist, clean
+        </echo>
+    </target>
+</project>
